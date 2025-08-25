@@ -1,0 +1,77 @@
+# === Config ===
+
+$BaseURL = "https://<<Finesse Server FQDN or IP address>>/finesse/api"
+
+$Username = "<<Type here Finesse Admin username>>"
+
+$Password = "<<Type here Password>>"
+
+$OutputFolder = "C:\Path-to-save-the-output"
+
+$DateStr = Get-Date -Format "yyyy-MM-dd"
+
+$LogFile = "$OutputFolder\<<free-text-as-required>>$DateStr.csv"
+ 
+# === Ensure output folder and file ===
+
+if (!(Test-Path $OutputFolder)) {
+
+    New-Item -ItemType Directory -Path $OutputFolder | Out-Null
+
+}
+
+if (!(Test-Path $LogFile)) {
+
+    "Timestamp,UserID,AgentName" | Out-File -Encoding UTF8 -FilePath $LogFile
+
+}
+ 
+# === Auth Header (Basic Auth) ===
+
+$pair = "$Username`:$Password"
+
+$encoded = [Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
+
+$headers = @{ Authorization = "Basic $encoded" }
+
+$headers["Accept"] = "application/xml"
+ 
+# === Get Users ===
+
+try {
+
+    $url = "$BaseURL/Users"
+
+    $response = Invoke-WebRequest -Uri $url -Headers $headers -Method GET -UseBasicParsing
+ 
+    [xml]$xmlDoc = $response.Content
+
+    $users = $xmlDoc.Users.User
+ 
+    $Now = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+ 
+    foreach ($user in $users) {
+
+        $status = $user.state
+
+        if ($status -ne "LOGOUT" -and $status -ne "") {
+
+            $userID = $user.loginName
+
+            $fullName = "$($user.firstName) $($user.lastName)"
+
+            "$Now,$userID,$fullName" | Out-File -Append -Encoding UTF8 -FilePath $LogFile
+
+        }
+
+    }
+
+}
+
+catch {
+
+    "[$(Get-Date)] ERROR: $_" | Out-File -Append -Encoding UTF8 -FilePath "$OutputFolder\error_log.txt"
+
+}
+
+ 
